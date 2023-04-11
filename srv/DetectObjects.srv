@@ -1,3 +1,6 @@
+# Nikolaus Wagner (C) 2023
+# nwagner@lincoln.ac.uk
+
 sensor_msgs/Image image
 ---
 vision_msgs/Detection2DArray detections

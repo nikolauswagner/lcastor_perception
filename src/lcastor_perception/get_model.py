@@ -1,3 +1,9 @@
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Nikolaus Wagner (C) 2023
+# nwagner@lincoln.ac.uk
+
 import tensorflow_hub as hub
 
 def get_model(model="faster_rcnn"):

@@ -1,3 +1,6 @@
 numpy
+rospy
+cv-bridge-3
 opencv-python
 tensorflow
+tensorflow-hub

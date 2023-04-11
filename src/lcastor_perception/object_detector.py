@@ -1,18 +1,22 @@
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Nikolaus Wagner (C) 2023
+# nwagner@lincoln.ac.uk
+
 import numpy as np
 import rospy
 import tensorflow as tf
 import tensorflow_hub as hub
-
+from cv_bridge import CvBridge
+from geometry_msgs.msg import Pose2D, PoseWithCovariance
 from std_msgs.msg import Header
-from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose, BoundingBox2D
-from geometry_msgs.msg import Pose, Pose2D, PoseWithCovariance
+
 from lcastor_perception.srv import DetectObjects, DetectObjectsResponse
 
-from cv_bridge import CvBridge
 
-
-class Detector():
+class ObjectDetector():
 
   def __init__(self, model="faster_rcnn"):
     self.model = hub.load("https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1")
@@ -22,7 +26,7 @@ class Detector():
     self.bridge = CvBridge()
 
   def handle_detection_request(self, req):
-    print("Detecting in img...")
+    rospy.loginfo("Running detector...")
 
     img = self.bridge.imgmsg_to_cv2(req.image, desired_encoding="passthrough")
     img_width = img.shape[1]
@@ -57,14 +61,17 @@ class Detector():
 
       detections.append(detection)
 
+    rospy.loginfo("Detecting done!")
+
     detection_msg = Detection2DArray(header=header, detections=detections)
     return DetectObjectsResponse(detections=detection_msg)
 
 
 if __name__ == '__main__':
-  rospy.init_node("detector")
+  rospy.init_node("object_detector")
 
-  detector = Detector()
+  rospy.loginfo("Initialising object detector...")
+  detector = ObjectDetector()
 
-  print("Detector running")
+  rospy.loginfo("Object detector is up!")
   rospy.spin()
