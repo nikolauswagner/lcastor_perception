@@ -12,4 +12,4 @@ This will provide a rosservice, accepting [sensor_msgs/Image](https://docs.ros.o
 
 The service passes the images on to a [Faster R-CNN with Resnet V2 Object detection model](https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1), trained on the [COCO 2017 dataset](https://cocodataset.org/#overview). The labels corresponding to the detection IDs are provided in [labels.txt](src/lcastor_perception/labels.txt).
 
-For a demo, see [test_detection_service.py](test/test_detection_msgs.py).
+For a demo, see [test_detection_service.py](test/test_detection_service.py).
