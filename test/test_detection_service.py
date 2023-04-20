@@ -19,8 +19,8 @@ if __name__ == '__main__':
 
   img_path = "./test_imgs/"
 
-  labels = np.genfromtxt("../src/labels.txt", dtype=str)
-  print(labels)
+  # labels = np.genfromtxt("../src/lcastor_perception/labels_coco.txt", dtype=str)
+  labels = np.genfromtxt("../src/lcastor_perception/labels_imagenet.txt", dtype=str)
 
   for child in Path(img_path).iterdir():
     if child.is_file():
