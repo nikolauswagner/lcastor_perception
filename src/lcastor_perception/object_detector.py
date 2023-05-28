@@ -8,6 +8,7 @@ import numpy as np
 import rospy
 import tensorflow as tf
 import tensorflow_hub as hub
+import torchvision
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose2D, PoseWithCovariance
 from std_msgs.msg import Header
@@ -18,26 +19,101 @@ from lcastor_perception.srv import DetectObjects, DetectObjectsResponse
 
 class ObjectDetector():
 
-  def __init__(self, model="faster_rcnn"):
-    self.model = hub.load("https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1")
+  def __init__(self, model_name="faster_rcnn_openimages"):
+    rospy.loginfo("Using model: " + model_name)
+    self.model_name = model_name
+    if self.model_name == "faster_rcnn_coco":
+      self.model = hub.load("https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1")
+    elif self.model_name == "faster_rcnn_openimages":
+      self.model = hub.load("https://tfhub.dev/google/faster_rcnn/openimages_v4/inception_resnet_v2/1")
+    elif self.model_name == "hrnet_coco":
+      self.model = hub.load("https://tfhub.dev/google/HRNet/coco-hrnetv2-w48/1")
+    elif self.model_name == "mask_rcnn_coco":
+      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT")
+      #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+      self.model.eval()
+    else:
+      rospy.logerr("Unknown model!")
 
     self.detection_service = rospy.Service("detect_objects", DetectObjects, self.handle_detection_request)
 
     self.bridge = CvBridge()
+    self.torch_preprocess = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor()
+        #torchvision.transforms.Normalize([0.485, 0.456, 0.406], 
+        #                                 [0.229, 0.224, 0.225])
+    ])
 
   def handle_detection_request(self, req):
     rospy.loginfo("Running detector...")
 
-    img = self.bridge.imgmsg_to_cv2(req.image, desired_encoding="passthrough")
+    img = self.bridge.imgmsg_to_cv2(req.image, desired_encoding="8UC3").copy()
+    return_img = self.bridge.cv2_to_imgmsg(img, "passthrough")
+
     img_width = img.shape[1]
     img_height = img.shape[0]
 
-    img_tensor = tf.image.convert_image_dtype(img, tf.uint8)[tf.newaxis, ...]
+    detection_classes = []
+    detection_scores = []
+    detection_boxes = []
 
-    results = self.model(img_tensor)
-    detection_classes = results["detection_classes"].numpy()[0].astype(np.uint32)
-    detection_scores = results["detection_scores"].numpy()[0]
-    detection_boxes = results["detection_boxes"].numpy()[0]
+    if self.model_name == "faster_rcnn_coco":
+      img_tensor = tf.image.convert_image_dtype(img, tf.uint8)[tf.newaxis, ...]
+      results = self.model(img_tensor)
+      detection_classes = results["detection_classes"].numpy()[0].astype(np.uint32)
+      detection_scores = results["detection_scores"].numpy()[0]
+      detection_boxes = results["detection_boxes"].numpy()[0]
+      detection_boxes[..., 0] *= img_height
+      detection_boxes[..., 1] *= img_width
+      detection_boxes[..., 2] *= img_height
+      detection_boxes[..., 3] *= img_width
+
+    elif self.model_name == "faster_rcnn_openimages":
+      img_tensor = tf.image.convert_image_dtype(img, tf.float32)[tf.newaxis, ...]
+      results = self.model.signatures["default"](img_tensor)
+      detection_classes = results["detection_class_labels"].numpy().astype(np.uint32)
+      detection_scores = results["detection_scores"].numpy()
+      detection_boxes = results["detection_boxes"].numpy()
+      detection_boxes[..., 0] *= img_height
+      detection_boxes[..., 1] *= img_width
+      detection_boxes[..., 2] *= img_height
+      detection_boxes[..., 3] *= img_width
+#
+#    elif self.model_name == "hrnet_coco":
+#      img_tensor = tf.image.convert_image_dtype(img, tf.float32)[tf.newaxis, ...]
+#      results = self.model.predict(img_tensor)
+#      img_seg = np.argmax(results.numpy()[0], axis=2).astype(int)
+#      ids = np.unique(img_seg)
+#      for i in ids:
+#        seg_id = (img_seg == i)
+#        rows = np.any(seg_id, axis=1)
+#        cols = np.any(seg_id, axis=0)
+#        r_min, r_max = np.where(rows)[0][[0, -1]]
+#        c_min, c_max = np.where(cols)[0][[0, -1]]
+#
+#        detection_boxes.append([r_min + ((r_max - r_min) / 2),
+#                                r_max - r_min,
+#                                c_min + ((c_max - c_min) / 2),
+#                                c_max - c_min])
+#
+#      print(detection_boxes)
+#
+#      cv2.imshow("results", np.argmax(results.numpy()[0], axis=2).astype(np.uint8))
+#      cv2.waitKey()
+#      #detection_classes = results["detection_class_labels"].numpy()[0].astype(np.uint32)
+#      #detection_scores = results["detection_scores"].numpy()[0]
+#      #detection_boxes = results"[detection_boxes"].numpy()[0]
+
+    elif self.model_name == "mask_rcnn_coco":
+      img_tensor = self.torch_preprocess(img).unsqueeze(0)
+      results = self.model(img_tensor)
+      segmask = np.argmax(results[0]["masks"].squeeze().detach().numpy(), axis=0).astype(np.uint16)
+      return_img = self.bridge.cv2_to_imgmsg(segmask, "passthrough")
+
+      detection_classes = results[0]["labels"].squeeze().detach().numpy()
+      detection_scores = results[0]["scores"].squeeze().detach().numpy()
+      detection_boxes = results[0]["boxes"].squeeze().detach().numpy()
+      detection_boxes = detection_boxes.take((1, 0, 3, 2), axis=1)
 
     header = Header(stamp=rospy.get_rostime())
     detections = []
@@ -47,17 +123,18 @@ class ObjectDetector():
       results = [ObjectHypothesisWithPose(id=detection_classes[i],
                                           score=detection_scores[i],
                                           pose=PoseWithCovariance())]
-      center = Pose2D(x=img_width * (detection_boxes[i][3] + detection_boxes[i][1]) / 2,
-                      y=img_height * (detection_boxes[i][2] + detection_boxes[i][0]) / 2)
-      size_x = img_width * (detection_boxes[i][3] - detection_boxes[i][1])
-      size_y = img_height * (detection_boxes[i][2] - detection_boxes[i][0])
+      center = Pose2D(x=(detection_boxes[i][3] + detection_boxes[i][1]) / 2,
+                      y=(detection_boxes[i][2] + detection_boxes[i][0]) / 2)
+      size_x = (detection_boxes[i][3] - detection_boxes[i][1])
+      size_y = (detection_boxes[i][2] - detection_boxes[i][0])
       bbox = BoundingBox2D(center=center,
                            size_x=size_x,
-                           size_y=size_y) 
+                           size_y=size_y)
+
       detection = Detection2D(header=header,
                               results=results,
                               bbox=bbox,
-                              source_img=self.bridge.cv2_to_imgmsg(img, "passthrough"))
+                              source_img=return_img)
 
       detections.append(detection)
 
@@ -71,7 +148,7 @@ if __name__ == '__main__':
   rospy.init_node("object_detector")
 
   rospy.loginfo("Initialising object detector...")
-  detector = ObjectDetector()
+  detector = ObjectDetector("mask_rcnn_coco")
 
   rospy.loginfo("Object detector is up!")
   rospy.spin()
