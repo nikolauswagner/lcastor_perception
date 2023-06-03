@@ -107,19 +107,30 @@ class ObjectDetector():
     elif self.model_name == "mask_rcnn_coco":
       img_tensor = self.torch_preprocess(img).unsqueeze(0)
       results = self.model(img_tensor)
-      segmask = np.argmax(results[0]["masks"].squeeze().detach().numpy(), axis=0).astype(np.uint16)
+      print(results[0]["labels"].squeeze().detach().numpy())
+      print(results[0]["labels"].squeeze().detach().numpy().shape)
+      num_detections = results[0]["labels"].squeeze().detach().numpy().size
+      if num_detections == 0:
+        segmask = np.zeros_like(img[..., 0])
+      elif num_detections == 1:
+        segmask = results[0]["masks"].squeeze().detach().numpy().astype(np.uint16)
+        detection_classes = [results[0]["labels"].squeeze().detach().numpy()]
+        detection_scores = [results[0]["scores"].squeeze().detach().numpy()]
+        detection_boxes = results[0]["boxes"].squeeze().detach().numpy()
+        detection_boxes = [detection_boxes.take((1, 0, 3, 2), axis=0)]
+      else:
+        segmask = np.argmax(results[0]["masks"].squeeze().detach().numpy(), axis=0).astype(np.uint16)
+        detection_classes = results[0]["labels"].squeeze().detach().numpy()
+        detection_scores = results[0]["scores"].squeeze().detach().numpy()
+        detection_boxes = results[0]["boxes"].squeeze().detach().numpy()
+        detection_boxes = detection_boxes.take((1, 0, 3, 2), axis=1)
+      
       return_img = self.bridge.cv2_to_imgmsg(segmask, "passthrough")
-
-      detection_classes = results[0]["labels"].squeeze().detach().numpy()
-      detection_scores = results[0]["scores"].squeeze().detach().numpy()
-      detection_boxes = results[0]["boxes"].squeeze().detach().numpy()
-      detection_boxes = detection_boxes.take((1, 0, 3, 2), axis=1)
 
     header = Header(stamp=rospy.get_rostime())
     detections = []
 
-    for i in range(len(detection_classes)):
-
+    for i in range(num_detections):
       results = [ObjectHypothesisWithPose(id=detection_classes[i],
                                           score=detection_scores[i],
                                           pose=PoseWithCovariance())]
