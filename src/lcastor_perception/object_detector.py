@@ -6,9 +6,7 @@
 
 import numpy as np
 import rospy
-import tensorflow as tf
-import tensorflow_hub as hub
-import torchvision
+
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose2D, PoseWithCovariance
 from std_msgs.msg import Header
@@ -23,12 +21,19 @@ class ObjectDetector():
     rospy.loginfo("Using model: " + model_name)
     self.model_name = model_name
     if self.model_name == "faster_rcnn_coco":
+      import tensorflow as tf
+      import tensorflow_hub as hub
       self.model = hub.load("https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1")
     elif self.model_name == "faster_rcnn_openimages":
+      import tensorflow as tf
+      import tensorflow_hub as hub
       self.model = hub.load("https://tfhub.dev/google/faster_rcnn/openimages_v4/inception_resnet_v2/1")
-    elif self.model_name == "hrnet_coco":
-      self.model = hub.load("https://tfhub.dev/google/HRNet/coco-hrnetv2-w48/1")
+#    elif self.model_name == "hrnet_coco":
+#      import tensorflow as tf
+#      import tensorflow_hub as hub
+#      self.model = hub.load("https://tfhub.dev/google/HRNet/coco-hrnetv2-w48/1")
     elif self.model_name == "mask_rcnn_coco":
+      import torchvision
       self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights="DEFAULT")
       #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
       self.model.eval()
@@ -107,9 +112,8 @@ class ObjectDetector():
     elif self.model_name == "mask_rcnn_coco":
       img_tensor = self.torch_preprocess(img).unsqueeze(0)
       results = self.model(img_tensor)
-      print(results[0]["labels"].squeeze().detach().numpy())
-      print(results[0]["labels"].squeeze().detach().numpy().shape)
       num_detections = results[0]["labels"].squeeze().detach().numpy().size
+      
       if num_detections == 0:
         segmask = np.zeros_like(img[..., 0])
       elif num_detections == 1:
