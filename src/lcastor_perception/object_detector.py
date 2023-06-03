@@ -29,7 +29,7 @@ class ObjectDetector():
     elif self.model_name == "hrnet_coco":
       self.model = hub.load("https://tfhub.dev/google/HRNet/coco-hrnetv2-w48/1")
     elif self.model_name == "mask_rcnn_coco":
-      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT")
+      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights="DEFAULT")
       #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
       self.model.eval()
     else:
