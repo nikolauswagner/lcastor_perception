@@ -1,0 +1,3 @@
+<launch>
+  <node pkg="lcastor_perception" name="object_detector" type="object_detector.py" output="screen" required="true"/>
+</launch>

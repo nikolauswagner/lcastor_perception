@@ -6,7 +6,7 @@
 
 import numpy as np
 import rospy
-
+import os
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose2D, PoseWithCovariance
 from std_msgs.msg import Header
@@ -33,9 +33,12 @@ class ObjectDetector():
 #      import tensorflow_hub as hub
 #      self.model = hub.load("https://tfhub.dev/google/HRNet/coco-hrnetv2-w48/1")
     elif self.model_name == "mask_rcnn_coco":
+      import torch
       import torchvision
-      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights="DEFAULT")
-      #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+      path = os.path.dirname(os.path.realpath(__file__))
+      checkpoint = torch.load(path + "/../../models/mask_rcnn_coco.pth")
+      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
+      self.model.load_state_dict(checkpoint)
       self.model.eval()
     else:
       rospy.logerr("Unknown model!")
