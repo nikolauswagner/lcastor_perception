@@ -33,6 +33,6 @@ file(GLOB python_scripts_DIR "scripts/*.py")
 file(GLOB bash_scripts_DIR "scripts/*.sh")
 catkin_install_python(PROGRAMS
 	src/lcastor_perception/object_detector.py
-	src/lcastor_perception/object_manager.py
+	src/lcastor_perception/detector_manager.py
 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
