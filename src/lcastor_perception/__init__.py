@@ -12,4 +12,4 @@ __license__ = "LGPL v2.1"
 __version__ = '0.0.1'
 
 from .object_detector import (ObjectDetector)
-from .object_manager import (ObjectManager)
+from .detector_manager import (DetectorManager)

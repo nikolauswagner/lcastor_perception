@@ -7,6 +7,7 @@
 import numpy as np
 import rospy
 import os
+import cv2
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose2D, PoseWithCovariance
 from std_msgs.msg import Header
@@ -35,11 +36,13 @@ class ObjectDetector():
     elif self.model_name == "mask_rcnn_coco":
       import torch
       import torchvision
+      self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
       path = os.path.dirname(os.path.realpath(__file__))
       checkpoint = torch.load(path + "/../../models/mask_rcnn_coco.pth")
       self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
       self.model.load_state_dict(checkpoint)
       self.model.eval()
+      self.model.to(self.device)
     else:
       rospy.logerr("Unknown model!")
 
@@ -113,23 +116,23 @@ class ObjectDetector():
 #      #detection_boxes = results"[detection_boxes"].numpy()[0]
 
     elif self.model_name == "mask_rcnn_coco":
-      img_tensor = self.torch_preprocess(img).unsqueeze(0)
+      img_tensor = self.torch_preprocess(img).unsqueeze(0).to(self.device)
       results = self.model(img_tensor)
-      num_detections = results[0]["labels"].squeeze().detach().numpy().size
+      num_detections = results[0]["labels"].squeeze().detach().cpu().numpy().size
       
       if num_detections == 0:
         segmask = np.zeros_like(img[..., 0])
       elif num_detections == 1:
-        segmask = results[0]["masks"].squeeze().detach().numpy().astype(np.uint16)
-        detection_classes = [results[0]["labels"].squeeze().detach().numpy()]
-        detection_scores = [results[0]["scores"].squeeze().detach().numpy()]
-        detection_boxes = results[0]["boxes"].squeeze().detach().numpy()
+        segmask = results[0]["masks"].squeeze().detach().cpu().numpy().astype(np.uint16)
+        detection_classes = [results[0]["labels"].squeeze().detach().cpu().numpy()]
+        detection_scores = [results[0]["scores"].squeeze().detach().cpu().numpy()]
+        detection_boxes = results[0]["boxes"].squeeze().detach().cpu().numpy()
         detection_boxes = [detection_boxes.take((1, 0, 3, 2), axis=0)]
       else:
-        segmask = np.argmax(results[0]["masks"].squeeze().detach().numpy(), axis=0).astype(np.uint16)
-        detection_classes = results[0]["labels"].squeeze().detach().numpy()
-        detection_scores = results[0]["scores"].squeeze().detach().numpy()
-        detection_boxes = results[0]["boxes"].squeeze().detach().numpy()
+        segmask = np.argmax(results[0]["masks"].squeeze().detach().cpu().numpy(), axis=0).astype(np.uint16)
+        detection_classes = results[0]["labels"].squeeze().detach().cpu().numpy()
+        detection_scores = results[0]["scores"].squeeze().detach().cpu().numpy()
+        detection_boxes = results[0]["boxes"].squeeze().detach().cpu().numpy()
         detection_boxes = detection_boxes.take((1, 0, 3, 2), axis=1)
       
       return_img = self.bridge.cv2_to_imgmsg(segmask, "passthrough")

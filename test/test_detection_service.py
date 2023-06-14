@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
   bridge = CvBridge()
 
-  img_path = "./test_imgs/"
+  img_path = "./custom_imgs/"
 
   labels = np.genfromtxt("../src/lcastor_perception/labels_coco.txt", dtype=str)
   #labels = np.genfromtxt("../src/lcastor_perception/labels_imagenet.txt", dtype=str)
@@ -43,7 +43,7 @@ if __name__ == '__main__':
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0))
 
       segmask = bridge.imgmsg_to_cv2(results.detections.detections[0].source_img, desired_encoding="passthrough")
-      cv2.imshow("segmask", segmask * 255)
+      cv2.imshow("segmask", segmask * 255 * 10)
       cv2.imshow("img", img)
       cv2.waitKey()
       print()
