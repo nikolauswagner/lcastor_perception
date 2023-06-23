@@ -24,18 +24,24 @@ class ObjectDetector():
     if self.model_name == "faster_rcnn_coco":
       import tensorflow as tf
       import tensorflow_hub as hub
+
       self.model = hub.load("https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1")
+
     elif self.model_name == "faster_rcnn_openimages":
       import tensorflow as tf
       import tensorflow_hub as hub
+
       self.model = hub.load("https://tfhub.dev/google/faster_rcnn/openimages_v4/inception_resnet_v2/1")
+
 #    elif self.model_name == "hrnet_coco":
 #      import tensorflow as tf
 #      import tensorflow_hub as hub
 #      self.model = hub.load("https://tfhub.dev/google/HRNet/coco-hrnetv2-w48/1")
+
     elif self.model_name == "mask_rcnn_coco":
       import torch
       import torchvision
+
       self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
       path = os.path.dirname(os.path.realpath(__file__))
       checkpoint = torch.load(path + "/../../models/mask_rcnn_coco.pth")
@@ -43,6 +49,27 @@ class ObjectDetector():
       self.model.load_state_dict(checkpoint)
       self.model.eval()
       self.model.to(self.device)
+
+    elif self.model_name == "mask_rcnn_ycb":
+      import torch
+      import torchvision
+      from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+      from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+
+      self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+      path = os.path.dirname(os.path.realpath(__file__))
+      checkpoint = torch.load(path + "/../../models/mask_rcnn_ycb.pth")
+      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT")
+      in_features = self.model.roi_heads.box_predictor.cls_score.in_features
+      self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 34)
+      in_features_mask = self.model.roi_heads.mask_predictor.conv5_mask.in_channels
+      self.model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
+                                                              256,
+                                                              34)  # num of classes
+      self.model.load_state_dict(checkpoint)
+      self.model.eval()
+      self.model.to(self.device)
+
     else:
       rospy.logerr("Unknown model!")
 
@@ -50,7 +77,8 @@ class ObjectDetector():
 
     self.bridge = CvBridge()
     self.torch_preprocess = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor()
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.ConvertImageDtype(torch.float)
         #torchvision.transforms.Normalize([0.485, 0.456, 0.406], 
         #                                 [0.229, 0.224, 0.225])
     ])
@@ -115,7 +143,7 @@ class ObjectDetector():
 #      #detection_scores = results["detection_scores"].numpy()[0]
 #      #detection_boxes = results"[detection_boxes"].numpy()[0]
 
-    elif self.model_name == "mask_rcnn_coco":
+    elif self.model_name == "mask_rcnn_coco" or self.model_name == "mask_rcnn_ycb":
       img_tensor = self.torch_preprocess(img).unsqueeze(0).to(self.device)
       results = self.model(img_tensor)
       num_detections = results[0]["labels"].squeeze().detach().cpu().numpy().size
@@ -151,6 +179,10 @@ class ObjectDetector():
       bbox = BoundingBox2D(center=center,
                            size_x=size_x,
                            size_y=size_y)
+
+      # Only attach image to first detection in array
+      if i > 0:
+        return_img = None
 
       detection = Detection2D(header=header,
                               results=results,
