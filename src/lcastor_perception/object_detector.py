@@ -8,12 +8,15 @@ import numpy as np
 import rospy
 import os
 import cv2
+import gc
+import torch
+import torchvision
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose2D, PoseWithCovariance
-from std_msgs.msg import Header
+from std_msgs.msg import Header, Bool
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose, BoundingBox2D
 
-from lcastor_perception.srv import DetectObjects, DetectObjectsResponse
+from lcastor_perception.srv import DetectObjects, DetectObjectsResponse, LoadModel, LoadModelResponse, UnloadModel, UnloadModelResponse
 
 
 class ObjectDetector():
@@ -21,6 +24,22 @@ class ObjectDetector():
   def __init__(self, model_name="faster_rcnn_openimages"):
     rospy.loginfo("Using model: " + model_name)
     self.model_name = model_name
+    self.model_is_loaded = False
+    self.load_model()
+
+    self.serv_detection = rospy.Service("/object_detector/detect_objects", DetectObjects, self.handle_detection_request)
+    self.serv_load_model = rospy.Service("/object_detector/load_model", LoadModel, self.load_model)
+    self.serv_unload_model = rospy.Service("/object_detector/unload_model", UnloadModel, self.unload_model)
+
+    self.bridge = CvBridge()
+    self.torch_preprocess = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.ConvertImageDtype(torch.float)
+        #torchvision.transforms.Normalize([0.485, 0.456, 0.406], 
+        #                                 [0.229, 0.224, 0.225])
+    ])
+
+  def load_model(self, req=None):
     if self.model_name == "faster_rcnn_coco":
       import tensorflow as tf
       import tensorflow_hub as hub
@@ -33,15 +52,7 @@ class ObjectDetector():
 
       self.model = hub.load("https://tfhub.dev/google/faster_rcnn/openimages_v4/inception_resnet_v2/1")
 
-#    elif self.model_name == "hrnet_coco":
-#      import tensorflow as tf
-#      import tensorflow_hub as hub
-#      self.model = hub.load("https://tfhub.dev/google/HRNet/coco-hrnetv2-w48/1")
-
     elif self.model_name == "mask_rcnn_coco":
-      import torch
-      import torchvision
-
       self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
       path = os.path.dirname(os.path.realpath(__file__))
       checkpoint = torch.load(path + "/../../models/mask_rcnn_coco.pth")
@@ -51,8 +62,6 @@ class ObjectDetector():
       self.model.to(self.device)
 
     elif self.model_name == "mask_rcnn_ycb":
-      import torch
-      import torchvision
       from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
       from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
@@ -72,18 +81,23 @@ class ObjectDetector():
 
     else:
       rospy.logerr("Unknown model!")
+      return LoadModelResponse(success=Bool(False))
 
-    self.detection_service = rospy.Service("detect_objects", DetectObjects, self.handle_detection_request)
+    self.model_is_loaded = True
+    return LoadModelResponse(success=Bool(True))
 
-    self.bridge = CvBridge()
-    self.torch_preprocess = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.ConvertImageDtype(torch.float)
-        #torchvision.transforms.Normalize([0.485, 0.456, 0.406], 
-        #                                 [0.229, 0.224, 0.225])
-    ])
+  def unload_model(self, req=None):
+    del self.model
+    gc.collect()
+    torch.cuda.empty_cache()
+    self.model_is_loaded = False
+    return UnloadModelResponse(success=Bool(True))
 
   def handle_detection_request(self, req):
+    if not self.model_is_loaded:
+      rospy.logerr("No model loaded!")
+      return DetectObjectsResponse()
+
     rospy.loginfo("Running detector...")
 
     img = self.bridge.imgmsg_to_cv2(req.image, desired_encoding="8UC3").copy()
@@ -117,31 +131,6 @@ class ObjectDetector():
       detection_boxes[..., 1] *= img_width
       detection_boxes[..., 2] *= img_height
       detection_boxes[..., 3] *= img_width
-#
-#    elif self.model_name == "hrnet_coco":
-#      img_tensor = tf.image.convert_image_dtype(img, tf.float32)[tf.newaxis, ...]
-#      results = self.model.predict(img_tensor)
-#      img_seg = np.argmax(results.numpy()[0], axis=2).astype(int)
-#      ids = np.unique(img_seg)
-#      for i in ids:
-#        seg_id = (img_seg == i)
-#        rows = np.any(seg_id, axis=1)
-#        cols = np.any(seg_id, axis=0)
-#        r_min, r_max = np.where(rows)[0][[0, -1]]
-#        c_min, c_max = np.where(cols)[0][[0, -1]]
-#
-#        detection_boxes.append([r_min + ((r_max - r_min) / 2),
-#                                r_max - r_min,
-#                                c_min + ((c_max - c_min) / 2),
-#                                c_max - c_min])
-#
-#      print(detection_boxes)
-#
-#      cv2.imshow("results", np.argmax(results.numpy()[0], axis=2).astype(np.uint8))
-#      cv2.waitKey()
-#      #detection_classes = results["detection_class_labels"].numpy()[0].astype(np.uint32)
-#      #detection_scores = results["detection_scores"].numpy()[0]
-#      #detection_boxes = results"[detection_boxes"].numpy()[0]
 
     elif self.model_name == "mask_rcnn_coco" or self.model_name == "mask_rcnn_ycb":
       img_tensor = self.torch_preprocess(img).unsqueeze(0).to(self.device)
@@ -201,7 +190,7 @@ if __name__ == '__main__':
   rospy.init_node("object_detector")
 
   rospy.loginfo("Initialising object detector...")
-  detector = ObjectDetector("mask_rcnn_coco")
+  detector = ObjectDetector("mask_rcnn_ycb")
 
   rospy.loginfo("Object detector is up!")
   rospy.spin()
