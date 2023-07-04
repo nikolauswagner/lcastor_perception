@@ -27,7 +27,7 @@ class ObjectDetector():
     self.model_is_loaded = False
     self.load_model()
 
-    self.serv_detection = rospy.Service("/object_detector/detect_objects", DetectObjects, self.handle_detection_request)
+    self.serv_detect_objects = rospy.Service("/object_detector/detect_objects", DetectObjects, self.handle_detection_request)
     self.serv_load_model = rospy.Service("/object_detector/load_model", LoadModel, self.load_model)
     self.serv_unload_model = rospy.Service("/object_detector/unload_model", UnloadModel, self.unload_model)
 
@@ -40,6 +40,9 @@ class ObjectDetector():
     ])
 
   def load_model(self, req=None):
+    if req:
+      self.model_name = req.model_name.data
+
     if self.model_name == "faster_rcnn_coco":
       import tensorflow as tf
       import tensorflow_hub as hub
@@ -55,26 +58,38 @@ class ObjectDetector():
     elif self.model_name == "mask_rcnn_coco":
       self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
       path = os.path.dirname(os.path.realpath(__file__))
-      checkpoint = torch.load(path + "/../../models/mask_rcnn_coco.pth")
+
+      if os.path.isfile(path + "/../../models/mask_rcnn_coco.pth"):
+        checkpoint = torch.load(path + "/../../models/mask_rcnn_coco.pth")
+      else:
+        rospy.logerr("Model not found! Make sure model is present locally!")
+        return LoadModelResponse(success=Bool(False))
+
       self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
       self.model.load_state_dict(checkpoint)
       self.model.eval()
       self.model.to(self.device)
 
     elif self.model_name == "mask_rcnn_ycb":
+      num_classes = 34
       from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
       from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
       self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
       path = os.path.dirname(os.path.realpath(__file__))
-      checkpoint = torch.load(path + "/../../models/mask_rcnn_ycb.pth")
+      if os.path.isfile(path + "../../models/maskrcnn_newest.pth"):
+        checkpoint = torch.load(path + "../../models/maskrcnn_newest.pth")
+      else:
+        rospy.logerr("Model not found! Make sure model is present locally!")
+        return LoadModelResponse(success=Bool(False))
+
       self.model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT")
       in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-      self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 34)
+      self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
       in_features_mask = self.model.roi_heads.mask_predictor.conv5_mask.in_channels
       self.model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
                                                               256,
-                                                              34)  # num of classes
+                                                              num_classes)
       self.model.load_state_dict(checkpoint)
       self.model.eval()
       self.model.to(self.device)
@@ -135,6 +150,7 @@ class ObjectDetector():
     elif self.model_name == "mask_rcnn_coco" or self.model_name == "mask_rcnn_ycb":
       img_tensor = self.torch_preprocess(img).unsqueeze(0).to(self.device)
       results = self.model(img_tensor)
+      print(results)
       num_detections = results[0]["labels"].squeeze().detach().cpu().numpy().size
       
       if num_detections == 0:
