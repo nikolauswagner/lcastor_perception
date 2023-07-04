@@ -16,9 +16,12 @@ catkin_python_setup()
 
 add_service_files(FILES
   DetectObjects.srv
+  LoadModel.srv
+  UnloadModel.srv
 )
 
 generate_messages(DEPENDENCIES
+	std_msgs
 	sensor_msgs
 	vision_msgs
 )

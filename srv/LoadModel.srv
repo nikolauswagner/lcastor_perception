@@ -1,6 +1,6 @@
 # Nikolaus Wagner (C) 2023
 # nwagner@lincoln.ac.uk
 
-# No arguments
+std_msgs/String model_name
 ---
 std_msgs/Bool success
