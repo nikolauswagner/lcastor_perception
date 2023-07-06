@@ -81,9 +81,8 @@ class DetectorManager():
       segmask = self.bridge.imgmsg_to_cv2(segmask, desired_encoding="passthrough").astype(np.uint8)
 
       for i, detection in enumerate(results.detections.detections):
-        if detection.results[0].score > 0.8:
+        if detection.results[0].score > 0.35:
           if depth_img is not None:
-            print(depth_img.dtype)
             model = image_geometry.PinholeCameraModel()
             model.fromCameraInfo(self.cam_info)
             ray = model.projectPixelTo3dRay((detection.bbox.center.x, detection.bbox.center.y))
@@ -95,17 +94,13 @@ class DetectorManager():
             point = [el*depth for el in ray_z]
 
             results = detection.results
-            center = Pose(Point(x=point[0],
-                                y=point[1],
-                                z=point[2]), Quaternion(0.0, 0.0, 0.0, 1.0))
-            print(center)
-            t = self.tf_listener.getLatestCommonTime("/torso_lift_link", "/xtion_rgb_optical_frame")
+            center = Pose(Point(x=float(point[0]) / 1000.0,
+                                y=float(point[1]) / 1000.0,
+                                z=float(point[2]) / 1000.0), Quaternion(0.0, 0.0, 0.0, 1.0))
+            t = self.tf_listener.getLatestCommonTime("/base_link", "/xtion_rgb_optical_frame")
             header.stamp = t
-            center = self.tf_listener.transformPose("/torso_lift_link", PoseStamped(header, center))
-            center.pose.position.z += 1000
-            #center.pose.position.z -= 1000
-            print(center)
-            print()
+            center = self.tf_listener.transformPose("/base_link", PoseStamped(header, center))
+   
             bbox = BoundingBox3D(center=center,
                                  size=Vector3(0.1, 0.1, 0.1))
 #
