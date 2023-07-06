@@ -90,7 +90,6 @@ class DetectorManager():
             depth = depth_img[int(detection.bbox.center.y), int(detection.bbox.center.x)]
             if depth == 0:
               continue
-            print(depth)
             point = [el*depth for el in ray_z]
 
             results = detection.results
@@ -101,7 +100,7 @@ class DetectorManager():
             header.stamp = t
             center = self.tf_listener.transformPose("/base_link", PoseStamped(header, center))
    
-            bbox = BoundingBox3D(center=center,
+            bbox = BoundingBox3D(center=center.pose,
                                  size=Vector3(0.1, 0.1, 0.1))
 #
             detection3d = Detection3D(header=header,
