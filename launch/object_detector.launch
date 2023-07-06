@@ -2,8 +2,8 @@
 
   <arg name="node_start_delay" default="5.0" /> 
 
-  <rosparam param="image_ns">"/xtion/rgb/"</rosparam>
-  <rosparam param="depth_ns">"/xtion/depth/"</rosparam>
+  <rosparam param="image_ns">"/xtion/rgb"</rosparam>
+  <rosparam param="depth_ns">"/xtion/depth"</rosparam>
 
   <node pkg="lcastor_perception" name="object_detector" type="object_detector.py" output="screen" required="true"/>
   <node pkg="lcastor_perception" name="detector_manager" type="detector_manager.py" output="screen" required="true" launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/>
