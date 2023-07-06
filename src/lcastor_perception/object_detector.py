@@ -25,7 +25,6 @@ class ObjectDetector():
     rospy.loginfo("Using model: " + model_name)
     self.model_name = model_name
     self.model_is_loaded = False
-    self.load_model()
 
     self.serv_detect_objects = rospy.Service("/object_detector/detect_objects", DetectObjects, self.handle_detection_request)
     self.serv_load_model = rospy.Service("/object_detector/load_model", LoadModel, self.load_model)
@@ -38,6 +37,8 @@ class ObjectDetector():
         #torchvision.transforms.Normalize([0.485, 0.456, 0.406], 
         #                                 [0.229, 0.224, 0.225])
     ])
+
+    self.load_model()
 
   def load_model(self, req=None):
     if req:
@@ -77,18 +78,18 @@ class ObjectDetector():
 
       self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
       path = os.path.dirname(os.path.realpath(__file__))
-      if os.path.isfile(path + "../../models/maskrcnn_newest.pth"):
-        checkpoint = torch.load(path + "../../models/maskrcnn_newest.pth")
+      if os.path.isfile(path + "/../../models/maskrcnn_ycb_all_epoch_0.pth"):
+        checkpoint = torch.load(path + "/../../models/maskrcnn_ycb_all_epoch_0.pth")
       else:
         rospy.logerr("Model not found! Make sure model is present locally!")
         return LoadModelResponse(success=Bool(False))
 
-      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT")
+      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None, weights_backbone=None)
       in_features = self.model.roi_heads.box_predictor.cls_score.in_features
       self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
       in_features_mask = self.model.roi_heads.mask_predictor.conv5_mask.in_channels
       self.model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
-                                                              256,
+                                                              512,
                                                               num_classes)
       self.model.load_state_dict(checkpoint)
       self.model.eval()
