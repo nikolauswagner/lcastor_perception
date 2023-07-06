@@ -7,9 +7,17 @@
 import rospy
 import numpy as np
 import cv2
-from sensor_msgs.msg import Image
+import os
+from sensor_msgs.msg import Image, CameraInfo
+from std_msgs.msg import String, Header
+
 from cv_bridge import CvBridge
+from tf import TransformListener
+import image_geometry
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose, BoundingBox2D
+
+from geometry_msgs.msg import Pose, PoseStamped, PoseWithCovariance, Point, Quaternion, Vector3
+from vision_msgs.msg import Detection3D, Detection3DArray, BoundingBox3D
 
 from lcastor_perception.srv import DetectObjects, LoadModel, UnloadModel
 
@@ -17,12 +25,17 @@ class DetectorManager():
   def __init__(self, image_ns, depth_ns=""):
     #rospy.Subscriber("{:s}/image_raw".format(image_ns), Image, self.cb_img, queue_size=1, buff_size=1)
     rospy.Subscriber("{:s}/image_raw".format(image_ns), Image, self.cb_img, queue_size=1)
+    rospy.Subscriber("{:s}/camera_info".format(image_ns), CameraInfo, self.cb_cam_info, queue_size=1)
     if depth_ns:
       #rospy.Subscriber("{:s}/image_raw".format(depth_ns), Image, self.cb_depth)
-      rospy.Subscriber("{:s}/image_raw".format(depth_ns), Image, self.cb_depth, queue_size=1)
+      rospy.Subscriber("{:s}/image".format(depth_ns), Image, self.cb_depth, queue_size=1)
+    rospy.Subscriber("{:s}/camera_info".format(depth_ns), CameraInfo, self.cb_cam_depth_info, queue_size=1)
 
     self.pub_detection_vis = rospy.Publisher("{:s}/detection_vis".format(image_ns), Image, queue_size=1)
     self.pub_detections = rospy.Publisher("{:s}/detections".format(image_ns), Detection2DArray, queue_size=1)
+    self.pub_detections_3d = rospy.Publisher("{:s}/detections_3d".format(image_ns), Detection3DArray, queue_size=1)
+
+    self.tf_listener = TransformListener()
 
     rospy.Timer(rospy.Duration(1.0 / 10.0), self.invoke_detection_service)
 
@@ -31,13 +44,13 @@ class DetectorManager():
     self.depth_img = None
 
     self.bridge = CvBridge()
-    self.labels = np.genfromtxt("./labels_ycb.txt", dtype=str)
+    self.labels = np.genfromtxt("{:s}/labels_ycb.txt".format(os.path.dirname(os.path.realpath(__file__))), dtype=str)
 
     self.detect_objects = rospy.ServiceProxy("/object_detector/detect_objects", DetectObjects)
     self.load_model = rospy.ServiceProxy("/object_detector/load_model", LoadModel)
     self.unload_model = rospy.ServiceProxy("/object_detector/unload_model", UnloadModel)
 
-    self.load_model("mask_rcnn_ycb")
+    self.load_model(String("mask_rcnn_ycb"))
 
   def invoke_detection_service(self, event):
 
@@ -55,17 +68,53 @@ class DetectorManager():
       rospy.logwarn("Cannot connect to detection service!")
       return
 
+    detections_msg = results.detections
+
+    header = Header(stamp=rospy.get_rostime(), frame_id="/xtion_rgb_optical_frame")
+    detections3d_msg = Detection3DArray()
+    #tf_time = self.tf_listener.getLatestCommonTime("xtion_rgb_optical_frame", "base_link")
+    #transform = self.tf_listener.lookupTransform("xtion_rgb_optical_frame", "base_link", tf_time)
+
     if len(results.detections.detections) > 0: 
+
       segmask = results.detections.detections[0].source_img
       segmask = self.bridge.imgmsg_to_cv2(segmask, desired_encoding="passthrough").astype(np.uint8)
 
       for i, detection in enumerate(results.detections.detections):
         if detection.results[0].score > 0.8:
-          #if depth_img is not None:
-          #  avg_dist = np.median(depth_img[segmask == i])
-          #  print(avg_dist)
-            #print(depth_img[segmask == i])
-            #print(np.median(depth_img[segmask == i]))
+          if depth_img is not None:
+            print(depth_img.dtype)
+            model = image_geometry.PinholeCameraModel()
+            model.fromCameraInfo(self.cam_info)
+            ray = model.projectPixelTo3dRay((detection.bbox.center.x, detection.bbox.center.y))
+            ray_z = [el / ray[2] for el in ray]
+            depth = depth_img[int(detection.bbox.center.y), int(detection.bbox.center.x)]
+            if depth == 0:
+              continue
+            print(depth)
+            point = [el*depth for el in ray_z]
+
+            results = detection.results
+            center = Pose(Point(x=point[0],
+                                y=point[1],
+                                z=point[2]), Quaternion(0.0, 0.0, 0.0, 1.0))
+            print(center)
+            t = self.tf_listener.getLatestCommonTime("/torso_lift_link", "/xtion_rgb_optical_frame")
+            header.stamp = t
+            center = self.tf_listener.transformPose("/torso_lift_link", PoseStamped(header, center))
+            center.pose.position.z += 1000
+            #center.pose.position.z -= 1000
+            print(center)
+            print()
+            bbox = BoundingBox3D(center=center,
+                                 size=Vector3(0.1, 0.1, 0.1))
+#
+            detection3d = Detection3D(header=header,
+                                      results=results,
+                                      bbox=bbox)
+
+            detections3d_msg.detections.append(detection3d)
+
           x_0 = int(detection.bbox.center.x - detection.bbox.size_x / 2)
           x_1 = int(detection.bbox.center.x + detection.bbox.size_x / 2)
           y_0 = int(detection.bbox.center.y - detection.bbox.size_y / 2)
@@ -78,22 +127,32 @@ class DetectorManager():
     img_msg = self.bridge.cv2_to_imgmsg(img, encoding="bgr8")
     self.pub_detection_vis.publish(img_msg)
 
-    detections_msg = results.detections
     self.pub_detections.publish(detections_msg)
+
+    self.pub_detections_3d.publish(detections3d_msg)
 
   def cb_img(self, img_msg):
     self.img_msg = img_msg
-    img = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="passthrough")
+    img = self.bridge.imgmsg_to_cv2(img_msg, img_msg.encoding)
     self.img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
+  def cb_cam_info(self, data):
+    self.cam_info = data
+
+  def cb_cam_depth_info(self, data):
+    self.cam_depth_info = data
+
+
   def cb_depth(self, img_msg):
-    self.depth_img = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="passthrough")
+    self.depth_img = self.bridge.imgmsg_to_cv2(img_msg, img_msg.encoding)
+    #cv2.imshow("depth", self.depth_img/10)
+    #cv2.waitKey()
 
 
 if __name__ == '__main__':
   rospy.init_node("detector_manager")
   image_ns = rospy.get_param("image_ns", "/xtion/rgb")
-  depth_ns = rospy.get_param("depth_ns", "/xtion/depth")
+  depth_ns = rospy.get_param("depth_ns", "/xtion/depth_registered")
   #image_ns = "/device_0/sensor_0/Color_0/image/data"
   #depth_ns = "/device_0/sensor_0/Depth_0/image/data"
 
