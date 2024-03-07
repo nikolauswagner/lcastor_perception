@@ -64,12 +64,12 @@ class ObjectDetector():
         checkpoint = torch.load(path + "/../../models/faster_rcnn_coco.pth")
         self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
         self.model.load_state_dict(checkpoint)
-        self.model.eval()
 
       else:
         rospy.logerr("Model not found locally, loading from hub...")
         self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=torchvision.models.detection.MaskRCNN_ResNet50_FPN_V2_Weights.COCO_V1)
 
+      self.model.eval()
       self.model.to(self.device)
 
     elif self.model_name == "mask_rcnn_ycb":
@@ -82,7 +82,7 @@ class ObjectDetector():
       if os.path.isfile(path + "/../../models/maskrcnn_ycb_all_epoch_0.pth"):
         checkpoint = torch.load(path + "/../../models/maskrcnn_ycb_all_epoch_0.pth")
       else:
-        rospy.logerr("Model not found locally, loading from hub...")
+        rospy.logerr("Model not found locally.")
         return LoadModelResponse(success=Bool(False))
 
       self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None, weights_backbone=None)
