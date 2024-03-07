@@ -68,7 +68,7 @@ class ObjectDetector():
 
       else:
         rospy.logerr("Model not found locally, loading from hub...")
-        self.model = hub.load("https://www.kaggle.com/models/tensorflow/mask-rcnn-inception-resnet-v2/frameworks/TensorFlow2/variations/1024x1024/versions/1")
+        self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=torchvision.models.detection.MaskRCNN_ResNet50_FPN_V2_Weights.COCO_V1)
 
       self.model.to(self.device)
 
