@@ -61,14 +61,15 @@ class ObjectDetector():
       path = os.path.dirname(os.path.realpath(__file__))
 
       if os.path.isfile(path + "/../../models/mask_rcnn_coco.pth"):
-        checkpoint = torch.load(path + "/../../models/mask_rcnn_coco.pth")
-      else:
-        rospy.logerr("Model not found! Make sure model is present locally!")
-        return LoadModelResponse(success=Bool(False))
+        checkpoint = torch.load(path + "/../../models/faster_rcnn_coco.pth")
+        self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
+        self.model.load_state_dict(checkpoint)
+        self.model.eval()
 
-      self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
-      self.model.load_state_dict(checkpoint)
-      self.model.eval()
+      else:
+        rospy.logerr("Model not found locally, loading from hub...")
+        self.model = hub.load("https://www.kaggle.com/models/tensorflow/mask-rcnn-inception-resnet-v2/frameworks/TensorFlow2/variations/1024x1024/versions/1")
+
       self.model.to(self.device)
 
     elif self.model_name == "mask_rcnn_ycb":
@@ -81,7 +82,7 @@ class ObjectDetector():
       if os.path.isfile(path + "/../../models/maskrcnn_ycb_all_epoch_0.pth"):
         checkpoint = torch.load(path + "/../../models/maskrcnn_ycb_all_epoch_0.pth")
       else:
-        rospy.logerr("Model not found! Make sure model is present locally!")
+        rospy.logerr("Model not found locally, loading from hub...")
         return LoadModelResponse(success=Bool(False))
 
       self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None, weights_backbone=None)
@@ -207,7 +208,8 @@ if __name__ == '__main__':
   rospy.init_node("object_detector")
 
   rospy.loginfo("Initialising object detector...")
-  detector = ObjectDetector("mask_rcnn_ycb")
+  detector_type = rospy.get_param("detector_type", "mask_rcnn_coco")
+  detector = ObjectDetector(detector_type)
 
   rospy.loginfo("Object detector is up!")
   rospy.spin()
