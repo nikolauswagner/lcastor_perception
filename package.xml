@@ -16,5 +16,7 @@
   <exec_depend>roslaunch</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>vision_msgs</exec_depend>
+  <exec_depend>geometry</exec_depend>
+  <exec_depend>image_geomtry</exec_depend>
 
 </package>
