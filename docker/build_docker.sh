@@ -2,6 +2,7 @@
 
 image_name=lcas.lincoln.ac.uk/lcastor/lcastor_perception
 
-arch="$(dpkg --print-architecture)"
+weights=${1:-ycb}
 
-docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) --build-arg=$arch -t ${image_name} $(dirname "$0")/
+docker build --build-arg WEIGHTS="coco"\
+             -t ${image_name} $(dirname "$0")/

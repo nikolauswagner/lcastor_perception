@@ -79,8 +79,8 @@ class ObjectDetector():
 
       self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
       path = os.path.dirname(os.path.realpath(__file__))
-      if os.path.isfile(path + "/../../models/maskrcnn_ycb_all_epoch_0.pth"):
-        checkpoint = torch.load(path + "/../../models/maskrcnn_ycb_all_epoch_0.pth")
+      if os.path.isfile(path + "/../../models/maskrcnn_ycb.pth"):
+        checkpoint = torch.load(path + "/../../models/maskrcnn_ycb.pth")
       else:
         rospy.logerr("Model not found locally.")
         return LoadModelResponse(success=Bool(False))
@@ -208,7 +208,7 @@ if __name__ == '__main__':
   rospy.init_node("object_detector")
 
   rospy.loginfo("Initialising object detector...")
-  detector_type = rospy.get_param("detector_type", "mask_rcnn_coco")
+  detector_type = rospy.get_param("detector_type", "mask_rcnn_ycb")
   detector = ObjectDetector(detector_type)
 
   rospy.loginfo("Object detector is up!")

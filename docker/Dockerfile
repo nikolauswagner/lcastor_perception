@@ -27,6 +27,7 @@ RUN rosdep install --from-paths src --ignore-src -r -y
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && catkin build
 
 # Create entrypoint for image
-COPY entrypoint.sh /
+ARG WEIGHTS
+COPY entrypoint_${WEIGHTS}.sh /entrypoint.sh
 WORKDIR /home/lcastor/ros_ws
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]

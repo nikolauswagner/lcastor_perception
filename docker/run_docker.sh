@@ -13,5 +13,4 @@ docker run --network host \
            -e ROS_IP=${ROS_IP} \
            -e NVIDIA_DRIVER_CAPABILITIES=all \
            --name "${image_name//\//-}" \
-           --rm \
            -it ${image_name}
