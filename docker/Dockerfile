@@ -20,7 +20,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt update && \
 RUN pip3 install tensorflow tensorflow-hub torchvision
 
 # Install perception package
-WORKDIR /home/
 WORKDIR /home/lcastor/ros_ws/src
 RUN git clone https://github.com/nikolauswagner/lcastor_perception.git
 WORKDIR /home/lcastor/ros_ws/
