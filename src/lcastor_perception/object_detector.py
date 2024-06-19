@@ -208,7 +208,7 @@ if __name__ == '__main__':
   rospy.init_node("object_detector")
 
   rospy.loginfo("Initialising object detector...")
-  detector_type = rospy.get_param("detector_type", "mask_rcnn_ycb")
+  detector_type = rospy.get_param("~detector_type", "mask_rcnn_ycb")
   detector = ObjectDetector(detector_type)
 
   rospy.loginfo("Object detector is up!")
