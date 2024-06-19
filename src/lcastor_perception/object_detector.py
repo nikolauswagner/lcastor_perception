@@ -61,7 +61,7 @@ class ObjectDetector():
       path = os.path.dirname(os.path.realpath(__file__))
 
       if os.path.isfile(path + "/../../models/mask_rcnn_coco.pth"):
-        checkpoint = torch.load(path + "/../../models/faster_rcnn_coco.pth")
+        checkpoint = torch.load(path + "/../../models/mask_rcnn_coco.pth")
         self.model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
         self.model.load_state_dict(checkpoint)
 
