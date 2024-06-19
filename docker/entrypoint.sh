@@ -11,10 +11,8 @@ echo "###"
 echo " "
 
 {
-
   echo "Try starting object detection..."
   /home/lcastor/ros_ws/src/lcastor_perception/scripts/get_model.sh mask_rcnn_coco
-  catkin build
   source "/home/lcastor/ros_ws/devel/setup.bash"
   roslaunch lcastor_perception object_detector.launch
 
