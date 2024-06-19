@@ -6,6 +6,7 @@ image_name=lcas.lincoln.ac.uk/lcastor/lcastor_perception
 echo "Starting docker container..."
 docker run --network host \
            --privileged \
+           -v $(pwd)/../models:/home/lcastor/ros_ws/src/lcastor_perception/models \
            --gpus all \
            --runtime nvidia \
            -e IMG_NAME=${image_name} \
