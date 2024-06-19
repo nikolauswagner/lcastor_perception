@@ -20,10 +20,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt update && \
 RUN pip3 install tensorflow tensorflow-hub torchvision
 
 # Install perception package
+WORKDIR /home/
 WORKDIR /home/lcastor/ros_ws/src
 RUN git clone https://github.com/nikolauswagner/lcastor_perception.git
 WORKDIR /home/lcastor/ros_ws/
-RUN rosdep install --from-paths src --ignore-src
+RUN rosdep install --from-paths src --ignore-src -r -y
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && catkin build
 
 # Create entrypoint for image
