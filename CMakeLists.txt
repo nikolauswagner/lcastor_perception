@@ -5,8 +5,6 @@ find_package(catkin REQUIRED COMPONENTS
 	roslaunch
 	rospy
 	message_generation
-	geometry
-	image_geometry
 
 	geometry_msgs
 	sensor_msgs
